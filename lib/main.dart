@@ -11,6 +11,11 @@ import 'signup_one.dart';
 import 'signup_two.dart';
 import 'signup_verify_otp.dart';
 import 'signup_success.dart';
+import 'dashboard_screen.dart';
+import 'notifications_screen.dart';
+import 'order_detail_one.dart';
+import 'order_status_screen.dart';
+import 'order_completed_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const PizzaApp());
@@ -46,6 +51,11 @@ class PizzaApp extends StatelessWidget {
         '/signup-two': (_) => const SignupTwoScreen(),
         '/signup-verify': (_) => const SignupVerifyOtpScreen(),
         '/signup-success': (_) => const SignupSuccessScreen(),
+        '/dashboard': (_) => const DashboardScreen(),
+        '/notifications': (_) => const NotificationsScreen(),
+        '/order-detail-one':  (_) => const OrderDetailOneScreen(),
+        '/order-status': (_) => const OrderStatusScreen(),
+        '/order-completed': (_) => const OrderCompletedScreen(),
 
 
       },
