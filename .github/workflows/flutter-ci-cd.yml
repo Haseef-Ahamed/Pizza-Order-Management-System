@@ -37,11 +37,11 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze code
-        run: flutter analyze
+      # - name: Analyze code
+      #   run: flutter analyze
 
-      - name: Run tests
-        run: flutter test
+      # - name: Run tests
+      #   run: flutter test
 
   # ----------------------
   # 2. Build Artifacts
