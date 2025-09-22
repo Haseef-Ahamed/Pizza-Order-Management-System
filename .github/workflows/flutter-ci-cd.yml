@@ -95,8 +95,21 @@ jobs:
           channel: stable
           cache: true
 
+      # ✅ Install Android SDK (cmdline-tools) so sdkmanager is available
+      - name: Install Android SDK (cmdline-tools)
+        uses: android-actions/setup-android@v3
+
+      # ✅ Accept licenses using the installed sdkmanager
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+
+      # (Optional but recommended) make sure required packages are present
+      - name: Install required Android packages
+        run: |
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
       - name: Cache pub & build
         uses: actions/cache@v4
