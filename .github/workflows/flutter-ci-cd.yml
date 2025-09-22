@@ -2,27 +2,12 @@ name: Flutter CI/CD
 
 on:
   push:
-    branches: [ "main", "dev", "feature/**" ]
-    paths:
-      - "**/*.dart"
-      - "pubspec.yaml"
-      - "pubspec.lock"
-      - "android/**"
-      - "web/**"
-      - "ios/**"
-      - ".github/workflows/**"
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "dev" ]
-    paths:
-      - "**/*.dart"
-      - "pubspec.yaml"
-      - "pubspec.lock"
-      - "android/**"
-      - "web/**"
-      - "ios/**"
-      - ".github/workflows/**"
+    branches: [ "main" ]
   workflow_dispatch:
 
+# Allow creating releases/tags
 permissions:
   contents: write
 
@@ -31,13 +16,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ----------------------
+  # 1) Lint & Tests
+  # ----------------------
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java 17 (required by AGP 8.x)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -47,35 +35,35 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.32.0"
-          channel: stable
+          channel: "stable"
           cache: true
 
-      - name: flutter doctor
+      - name: Flutter doctor
         run: flutter doctor -v
 
-      - name: Cache pub & build
+      - name: Cache Pub & build
         uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
-            ~/.gradle/caches
-            ~/.gradle/wrapper
             build
-          key: ${{ runner.os }}-pubgradle-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pubgradle-
-            ${{ runner.os }}-
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-pub-
 
-      - name: Install deps
+      - name: Install dependencies
         run: flutter pub get
 
+      # Uncomment if you want to fail the job on issues
       # - name: Analyze
       #   run: flutter analyze
 
-      # - name: Tests
+      # - name: Test
       #   run: flutter test --coverage
 
-  build:
+  # ----------------------
+  # 2) Build & Release
+  # ----------------------
+  build_and_release:
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -92,62 +80,73 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.32.0"
-          channel: stable
+          channel: "stable"
           cache: true
 
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses
 
-      - name: Cache pub & build
+      - name: Cache Pub & build
         uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
+            build
             ~/.gradle/caches
             ~/.gradle/wrapper
-            build
           key: ${{ runner.os }}-pubgradle-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pubgradle-
             ${{ runner.os }}-
 
-      - name: Install deps
+      - name: Install dependencies
         run: flutter pub get
 
-      # ---- Auto version bump for this run (not committed) ----
-      - name: Update build version
-        id: bump
-        shell: bash
-        run: |
-          VERSION_NAME=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
-          BUILD_NUMBER=${{ github.run_number }}
-          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
-          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
-          sed -i "s/^version: .*/version: $VERSION_NAME+$BUILD_NUMBER/" pubspec.yaml
-          echo "New version: $VERSION_NAME+$BUILD_NUMBER"
-
-      # ---- OPTIONAL: signing (uncomment + add repo secrets) ----
+      # ---- Optional: Sign Release APK (provide secrets to enable) ----
       # - name: Decode keystore
       #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-      #   run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+      #   run: |
+      #     echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
       #   env:
       #     ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       #
       # - name: Configure signing
       #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   run: |
-      #     cat > android/key.properties <<EOF
+      #     cat >> android/key.properties <<EOF
       #     storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       #     keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
       #     keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
       #     storeFile=release.keystore
       #     EOF
 
+      # ---- Auto version bump (doesn't commit; just for this build) ----
+      - name: Update build version
+        id: bump
+        shell: bash
+        run: |
+          VERSION_NAME=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "New version: $VERSION_NAME+$BUILD_NUMBER"
+          sed -i "s/^version: .*/version: $VERSION_NAME+$BUILD_NUMBER/" pubspec.yaml
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+
+      # ---- Build Android APK (release) ----
       - name: Build Android APK
         run: flutter build apk --release
-        # or per-ABI:
+        # For smaller per-ABI outputs, use:
         # run: flutter build apk --release --split-per-abi
 
+      - name: Upload APK (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            # If split-per-abi: build/app/outputs/flutter-apk/*-release.apk
+
+      # ---- Build Web ----
       - name: Build Web
         run: flutter build web --release
 
@@ -157,26 +156,14 @@ jobs:
           zip -r ../web-build.zip .
           cd -
 
-      # Always upload job artifacts for any branch
-      - name: Upload APK (artifact)
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            # build/app/outputs/flutter-apk/*-release.apk
-
       - name: Upload Web (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: web-build
-          path: |
-            build/web
-            build/web-build.zip
+          path: build/web
 
-      # Publish a GitHub Release ONLY for main
-      - name: Create GitHub Release (main only)
-        if: github.ref == 'refs/heads/main'
+      # ---- Create GitHub Release & attach assets ----
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.bump.outputs.version_name }}+${{ steps.bump.outputs.build_number }}
@@ -189,19 +176,3 @@ jobs:
             build/web-build.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # --- OPTIONAL: publish prereleases for dev/feature branches ---
-      # - name: Create prerelease (dev/feature)
-      #   if: github.ref != 'refs/heads/main'
-      #   uses: softprops/action-gh-release@v2
-      #   with:
-      #     tag_name: ${{ github.ref_name }}-${{ steps.bump.outputs.version_name }}+${{ steps.bump.outputs.build_number }}
-      #     name: "${{ github.ref_name }} build — ${{ steps.bump.outputs.version_name }} + ${{ steps.bump.outputs.build_number }}"
-      #     draft: false
-      #     prerelease: true
-      #     generate_release_notes: true
-      #     files: |
-      #       build/app/outputs/flutter-apk/app-release.apk
-      #       build/web-build.zip
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
