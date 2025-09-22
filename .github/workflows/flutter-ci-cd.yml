@@ -1,74 +1,59 @@
-name: Flutter CI/CD
+name: Monorepo CI/CD (Order + Time)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "dev", "feature/**" ]
+    paths:
+      - ".github/workflows/**"
+      - "order-mobile/**"
+      - "order-web/**"
+      - "time-backend/**"
+      - "time-frontend/**"
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
+    paths:
+      - ".github/workflows/**"
+      - "order-mobile/**"
+      - "order-web/**"
+      - "time-backend/**"
+      - "time-frontend/**"
   workflow_dispatch:
 
-# Allow creating releases/tags
 permissions:
-  contents: write
+  contents: write          # create releases
+  packages: write          # push images to GHCR
+  id-token: write          # (optional for future cloud deploys)
 
 concurrency:
-  group: flutter-cicd-${{ github.ref }}
+  group: monorepo-cicd-${{ github.ref }}
   cancel-in-progress: true
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Global configuration (edit to your repo layout)
+# ──────────────────────────────────────────────────────────────────────────────
+env:
+  MOBILE_DIR: order-mobile
+  ORDER_WEB_DIR: order-web
+  TIME_BACKEND_DIR: time-backend
+  TIME_FRONTEND_DIR: time-frontend
+
+# Utility to check if a path exists (hashFiles returns empty when nothing matches)
+# We'll use `if: ${{ hashFiles(format('{0}/**', env.MOBILE_DIR)) != '' }}` in jobs.
+# ──────────────────────────────────────────────────────────────────────────────
+
 jobs:
-  # ----------------------
-  # 1) Lint & Tests
-  # ----------------------
-  test:
+  # ===========================================================================
+  # 1) ORDER MANAGEMENT — MOBILE (Flutter Android)
+  # ===========================================================================
+  order_mobile_test:
+    name: Order Mobile • Test
     runs-on: ubuntu-latest
+    if: ${{ hashFiles(format('{0}/pubspec.yaml', env.MOBILE_DIR)) != '' }}
+    defaults:
+      run:
+        working-directory: ${{ env.MOBILE_DIR }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Java 17 (required by AGP 8.x)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.32.0"
-          channel: "stable"
-          cache: true
-
-      - name: Flutter doctor
-        run: flutter doctor -v
-
-      - name: Cache Pub & build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            build
-          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
-          restore-keys: ${{ runner.os }}-pub-
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      # Uncomment if you want to fail the job on issues
-      # - name: Analyze
-      #   run: flutter analyze
-
-      # - name: Test
-      #   run: flutter test --coverage
-
-  # ----------------------
-  # 2) Build & Release
-  # ----------------------
-  build_and_release:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -80,99 +65,367 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.32.0"
-          channel: "stable"
+          channel: stable
           cache: true
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
+      - name: flutter doctor
+        run: flutter doctor -v
 
-      - name: Cache Pub & build
+      - name: Cache pub/gradle/build
         uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
-            build
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-pubgradle-${{ hashFiles('pubspec.lock') }}
+            build
+          key: ${{ runner.os }}-order-mobile-${{ hashFiles(format('{0}/pubspec.lock', env.MOBILE_DIR)) }}
           restore-keys: |
-            ${{ runner.os }}-pubgradle-
+            ${{ runner.os }}-order-mobile-
             ${{ runner.os }}-
 
-      - name: Install dependencies
+      - name: Install deps
         run: flutter pub get
 
-      # ---- Optional: Sign Release APK (provide secrets to enable) ----
+      # - name: Analyze
+      #   run: flutter analyze
+
+      # - name: Tests
+      #   run: flutter test --coverage
+
+  order_mobile_build:
+    name: Order Mobile • Build APK
+    runs-on: ubuntu-latest
+    needs: order_mobile_test
+    if: ${{ needs.order_mobile_test.result == 'success' }}
+    defaults:
+      run:
+        working-directory: ${{ env.MOBILE_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # ✅ Android SDK (fixes sdkmanager not found; also accepts licenses)
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools: "34.0.0"
+          cache: true
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.0"
+          channel: stable
+          cache: true
+
+      - name: Cache pub/gradle/build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            build
+          key: ${{ runner.os }}-order-mobile-${{ hashFiles(format('{0}/pubspec.lock', env.MOBILE_DIR)) }}
+          restore-keys: |
+            ${{ runner.os }}-order-mobile-
+            ${{ runner.os }}-
+
+      - name: Install deps
+        run: flutter pub get
+
+      - name: Bump version (runtime only)
+        id: mobver
+        shell: bash
+        run: |
+          VERSION_NAME=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          BUILD_NUMBER=${{ github.run_number }}
+          sed -i "s/^version: .*/version: $VERSION_NAME+$BUILD_NUMBER/" pubspec.yaml
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "New version: $VERSION_NAME+$BUILD_NUMBER"
+
+      # ---- OPTIONAL SIGNING (uncomment and add secrets to sign the APK) ----
       # - name: Decode keystore
       #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-      #   run: |
-      #     echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+      #   run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
       #   env:
       #     ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      #
       # - name: Configure signing
       #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   run: |
-      #     cat >> android/key.properties <<EOF
+      #     cat > android/key.properties <<EOF
       #     storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       #     keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
       #     keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
       #     storeFile=release.keystore
       #     EOF
 
-      # ---- Auto version bump (doesn't commit; just for this build) ----
-      - name: Update build version
-        id: bump
-        shell: bash
-        run: |
-          VERSION_NAME=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
-          BUILD_NUMBER=${{ github.run_number }}
-          echo "New version: $VERSION_NAME+$BUILD_NUMBER"
-          sed -i "s/^version: .*/version: $VERSION_NAME+$BUILD_NUMBER/" pubspec.yaml
-          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
-          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
-
-      # ---- Build Android APK (release) ----
-      - name: Build Android APK
+      - name: Build APK (release)
         run: flutter build apk --release
-        # For smaller per-ABI outputs, use:
+        # For smaller APKs per-ABI:
         # run: flutter build apk --release --split-per-abi
 
       - name: Upload APK (artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
+          name: order-mobile-apk
           path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            # If split-per-abi: build/app/outputs/flutter-apk/*-release.apk
+            ${{ env.MOBILE_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+            ${{ env.MOBILE_DIR }}/build/app/outputs/flutter-apk/*-release.apk
 
-      # ---- Build Web ----
-      - name: Build Web
+  # ===========================================================================
+  # 2) ORDER MANAGEMENT — WEB (Flutter Web OR Node SPA)
+  #    If `${ORDER_WEB_DIR}/pubspec.yaml` exists -> Flutter Web
+  #    else if `${ORDER_WEB_DIR}/package.json` exists -> Node/Web (React, Vite, etc.)
+  # ===========================================================================
+  order_web_flutter_build:
+    name: Order Web • Flutter Web
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles(format('{0}/pubspec.yaml', env.ORDER_WEB_DIR)) != '' }}
+    defaults:
+      run:
+        working-directory: ${{ env.ORDER_WEB_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.0"
+          channel: stable
+          cache: true
+
+      - name: Cache pub/build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            build
+          key: ${{ runner.os }}-order-web-flutter-${{ hashFiles(format('{0}/pubspec.lock', env.ORDER_WEB_DIR)) }}
+          restore-keys: |
+            ${{ runner.os }}-order-web-flutter-
+            ${{ runner.os }}-
+
+      - name: Install deps
+        run: flutter pub get
+
+      - name: Build Web (release)
         run: flutter build web --release
 
       - name: Zip Web build
         run: |
           cd build/web
-          zip -r ../web-build.zip .
+          zip -r ../../web-order.zip .
           cd -
 
       - name: Upload Web (artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: web-build
-          path: build/web
+          name: order-web-build
+          path: |
+            ${{ env.ORDER_WEB_DIR }}/build/web
+            ${{ env.ORDER_WEB_DIR }}/web-order.zip
 
-      # ---- Create GitHub Release & attach assets ----
-      - name: Create GitHub Release
+  order_web_node_build:
+    name: Order Web • Node SPA
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles(format('{0}/package.json', env.ORDER_WEB_DIR)) != '' && hashFiles(format('{0}/pubspec.yaml', env.ORDER_WEB_DIR)) == '' }}
+    defaults:
+      run:
+        working-directory: ${{ env.ORDER_WEB_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ env.ORDER_WEB_DIR }}/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      # - name: Lint / Test
+      #   run: npm run test --if-present
+
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Archive dist
+        run: |
+          if [ -d "dist" ]; then zip -r ../web-order.zip dist;
+          elif [ -d "build" ]; then zip -r ../web-order.zip build;
+          else echo "No dist/build folder"; fi
+
+      - name: Upload Web (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: order-web-build
+          path: |
+            ${{ env.ORDER_WEB_DIR }}/dist
+            ${{ env.ORDER_WEB_DIR }}/build
+            ${{ env.ORDER_WEB_DIR }}/web-order.zip
+
+  # ===========================================================================
+  # 3) TIME MANAGEMENT — BACKEND (Node → Docker → GHCR)
+  # ===========================================================================
+  time_backend_build_push:
+    name: Time Backend • Docker → GHCR
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles(format('{0}/package.json', env.TIME_BACKEND_DIR)) != '' }}
+    defaults:
+      run:
+        working-directory: ${{ env.TIME_BACKEND_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ env.TIME_BACKEND_DIR }}/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      # - name: Tests
+      #   run: npm test --if-present
+
+      - name: Build (if applicable)
+        run: npm run build --if-present
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-time-backend
+          tags: |
+            type=raw,value=${{ github.sha }}
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.TIME_BACKEND_DIR }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Publish run artifact (Docker tags)
+        run: echo "${{ steps.meta.outputs.tags }}" > ../time-backend-image-tags.txt
+
+      - name: Upload tags (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: time-backend-image-tags
+          path: ${{ env.TIME_BACKEND_DIR }}/../time-backend-image-tags.txt
+
+  # ===========================================================================
+  # 4) TIME MANAGEMENT — FRONTEND (React/Vite)
+  # ===========================================================================
+  time_frontend_build:
+    name: Time Frontend • Build
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles(format('{0}/package.json', env.TIME_FRONTEND_DIR)) != '' }}
+    defaults:
+      run:
+        working-directory: ${{ env.TIME_FRONTEND_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ env.TIME_FRONTEND_DIR }}/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      # - name: Tests
+      #   run: npm test --if-present
+
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Archive FE build
+        run: |
+          if [ -d "dist" ]; then zip -r ../time-frontend.zip dist;
+          elif [ -d "build" ]; then zip -r ../time-frontend.zip build;
+          else echo "No dist/build folder"; fi
+
+      - name: Upload FE build (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: time-frontend-build
+          path: |
+            ${{ env.TIME_FRONTEND_DIR }}/dist
+            ${{ env.TIME_FRONTEND_DIR }}/build
+            ${{ env.TIME_FRONTEND_DIR }}/../time-frontend.zip
+
+  # ===========================================================================
+  # 5) RELEASE (main only) — attach APK + web + FE bundles
+  # ===========================================================================
+  release_main:
+    name: Release • Attach Artifacts (main only)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - order_mobile_build
+      - order_web_flutter_build
+      - order_web_node_build
+      - time_frontend_build
+      - time_backend_build_push
+    steps:
+      - uses: actions/checkout@v4
+
+      # Gather all artifacts from previous jobs
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # Derive a version for the tag:
+      # Prefer mobile's version if available; else fallback to 0.0.0
+      - name: Compute Release Version
+        id: rel
+        shell: bash
+        run: |
+          VERSION="0.0.0"
+          # Try to read mobile pubspec version (if artifact contains pubspec, we can't; so fallback to repo file)
+          if [ -f "${{ env.MOBILE_DIR }}/pubspec.yaml" ]; then
+            VERSION=$(grep '^version:' "${{ env.MOBILE_DIR }}/pubspec.yaml" | sed 's/version: //; s/+.*//')
+          fi
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "tag=v${VERSION}+${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          echo "name=Release ${VERSION} + ${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          echo "Using tag v${VERSION}+${BUILD_NUMBER}"
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.bump.outputs.version_name }}+${{ steps.bump.outputs.build_number }}
-          name: Flutter ${{ steps.bump.outputs.version_name }} + ${{ steps.bump.outputs.build_number }}
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: ${{ steps.rel.outputs.name }}
           draft: false
           prerelease: false
           generate_release_notes: true
           files: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/web-build.zip
+            artifacts/order-mobile-apk/**.apk
+            artifacts/order-web-build/web-order.zip
+            artifacts/time-frontend-build/time-frontend.zip
+            artifacts/time-backend-image-tags/time-backend-image-tags.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
