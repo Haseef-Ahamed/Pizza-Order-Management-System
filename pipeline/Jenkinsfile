@@ -4,19 +4,32 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
+                git branch: 'main', changelog: false, credentialsId: '71294f3e-d70d-491d-9c6f-a3baa1121c45', poll: false, url: 'https://github.com/Haseef-Ahamed/Pizza-Order-Management-System.git'
                 echo 'Checking out source code...'
                 // Add checkout steps here
+            }
+        }
+        stage('install dependencies') {
+            steps {
+                echo 'Installing dependencies...'
+                sh 'flutter pub get'
+                echo 'Dependencies installed successfully.'
+                // Add dependency installation steps here
             }
         }
         stage('Build') {
             steps {
                 echo 'Building...'
+                sh 'flutter build apk --release'
+                echo 'Build completed successfully.'
                 // Add build steps here
             }
         }
         stage('Test') {
             steps {
                 echo 'Testing...'
+                sh 'flutter test'
+                echo 'All tests passed successfully.'
                 // Add test steps here
             }
         }
