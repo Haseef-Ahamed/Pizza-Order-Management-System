@@ -18,6 +18,9 @@ void main() {
     // Verify that the app builds without errors
     expect(find.byType(MaterialApp), findsOneWidget);
 
+    // Let the splash screen timer complete
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+
     // // Verify that our counter starts at 0.
     // expect(find.text('0'), findsOneWidget);
     // expect(find.text('1'), findsNothing);
