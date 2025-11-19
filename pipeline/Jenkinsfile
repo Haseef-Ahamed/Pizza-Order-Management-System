@@ -41,12 +41,31 @@ pipeline {
                 // Add dependency installation steps here
             }
         }
-        stage('Build') {
+        stage('Build Android APK') {
             steps {
                 echo 'Building...'
                 sh 'flutter build apk --release'
                 echo 'Build completed successfully.'
                 // Add build steps here
+            }
+        }
+        stage('Build iOS IPA') {
+            steps {
+                echo 'Building...'
+                sh 'flutter build ios --release'
+                echo 'Build completed successfully.'
+                // Add build steps here
+            }
+        }
+        stage('Archive Artifacts') {
+            steps {
+                echo 'Archiving artifacts...'
+                archiveArtifacts artifacts: 'build/app/outputs/flutter-apk/app-release.apk', fingerprint: true
+                echo 'Artifacts archived successfully.'
+                // Add artifact archiving steps here
+
+                echo 'Archiving iOS artifacts...'
+                archiveArtifacts artifacts: 'build/ios/ipa/*.ipa', fingerprint: true
             }
         }
         stage('Test') {
