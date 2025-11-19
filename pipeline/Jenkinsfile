@@ -85,7 +85,6 @@ pipeline {
                             export GOOGLE_APPLICATION_CREDENTIALS=\${GOOGLE_CREDENTIALS}
                             
                             firebase appdistribution:distribute ${APK_PATH} \
-                                --withCredentials
                                 --app \${FIREBASE_APP_ID} \
                                 --groups ${FIREBASE_TESTER_GROUPS} \
                                 --release-notes "${releaseNotes}"
