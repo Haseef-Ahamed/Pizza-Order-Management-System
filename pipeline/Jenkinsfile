@@ -49,14 +49,14 @@ pipeline {
                 // Add build steps here
             }
         }
-        stage('Build iOS IPA') {
-            steps {
-                echo 'Building...'
-                sh 'flutter build ios --release'
-                echo 'Build completed successfully.'
-                // Add build steps here
-            }
-        }
+        // stage('Build iOS IPA') {
+        //     steps {
+        //         echo 'Building...'
+        //         sh 'flutter build ios --release'
+        //         echo 'Build completed successfully.'
+        //         // Add build steps here
+        //     }
+        // }
         stage('Archive Artifacts') {
             steps {
                 echo 'Archiving artifacts...'
@@ -64,8 +64,8 @@ pipeline {
                 echo 'Artifacts archived successfully.'
                 // Add artifact archiving steps here
 
-                echo 'Archiving iOS artifacts...'
-                archiveArtifacts artifacts: 'build/ios/ipa/*.ipa', fingerprint: true
+                // echo 'Archiving iOS artifacts...'
+                // archiveArtifacts artifacts: 'build/ios/ipa/*.ipa', fingerprint: true
             }
         }
         stage('Test') {
