@@ -1,5 +1,15 @@
 pipeline {
     agent any
+    tools {
+        jdk 'jdk11'
+        flutter 'Flutter SDK'
+    }
+        environment {
+            JAVA_HOME = '/usr/lib/jvm/java-11-openjdk-amd64'
+            PATH = "${env.JAVA_HOME}/bin:${env.PATH}"
+            FLUTTER_HOME = '/opt/flutter'
+            PATH = "${env.FLUTTER_HOME}/bin:${env.PATH}"
+        }
 
     stages {
         stage('Checkout') {
@@ -7,6 +17,13 @@ pipeline {
                 git branch: 'main', changelog: false, credentialsId: '71294f3e-d70d-491d-9c6f-a3baa1121c45', poll: false, url: 'https://github.com/Haseef-Ahamed/Pizza-Order-Management-System.git'
                 echo 'Checking out source code...'
                 // Add checkout steps here
+            }
+        }
+        stage('Set up JDK') {
+            steps {
+                echo 'Setting up JDK environment...'
+                sh 'java -version'
+                echo 'JDK environment set up successfully.'
             }
         }
         stage('Set up Flutter') {
