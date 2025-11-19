@@ -9,6 +9,10 @@ pipeline {
             FLUTTER_HOME = "/opt/flutter"
             ANDROID_HOME = "/opt/android-sdk"
             PATH = "${FLUTTER_HOME}/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+
+            // Firebase Configuration
+            FIREBASE_TESTER_GROUPS = 'testers'  // Change this to your tester group name
+            APK_PATH = 'build/app/outputs/flutter-apk/app-release.apk'
         }
 
     stages {
@@ -41,12 +45,53 @@ pipeline {
                 // Add dependency installation steps here
             }
         }
+        stage('Test') {
+            steps {
+                echo 'Testing...'
+                sh 'flutter test'
+                echo 'All tests passed successfully.'
+                // Add test steps here
+            }
+        }
         stage('Build Android APK') {
             steps {
                 echo 'Building...'
                 sh 'flutter build apk --release'
                 echo 'Build completed successfully.'
                 // Add build steps here
+            }
+        }
+
+        stage('Verify APK') {
+            steps {
+                echo 'Verifying APK exists...'
+                sh "ls -lh ${APK_PATH}"
+                sh "file ${APK_PATH}"
+            }
+        }
+        
+        stage('Distribute to Firebase') {
+            steps {
+                echo 'Distributing APK to Firebase App Distribution...'
+                withCredentials([
+                    file(credentialsId: 'firebase-service-account', variable: 'GOOGLE_CREDENTIALS'),
+                    string(credentialsId: 'firebase-app-id', variable: 'FIREBASE_APP_ID')
+                    ]) {
+                    script {
+                        def releaseNotes = "Build #${BUILD_NUMBER}\nCommit: ${GIT_COMMIT}\nBranch: ${GIT_BRANCH}"
+                        
+                        sh """
+                            export GOOGLE_APPLICATION_CREDENTIALS=\${GOOGLE_CREDENTIALS}
+                            
+                            firebase appdistribution:distribute ${APK_PATH} \
+                                --withCredentials
+                                --app \${FIREBASE_APP_ID} \
+                                --groups ${FIREBASE_TESTER_GROUPS} \
+                                --release-notes "${releaseNotes}"
+                        """
+                    }
+                }
+                echo '✅ APK distributed to Firebase successfully!'
             }
         }
         // stage('Build iOS IPA') {
@@ -68,14 +113,7 @@ pipeline {
                 // archiveArtifacts artifacts: 'build/ios/ipa/*.ipa', fingerprint: true
             }
         }
-        stage('Test') {
-            steps {
-                echo 'Testing...'
-                sh 'flutter test'
-                echo 'All tests passed successfully.'
-                // Add test steps here
-            }
-        }
+        
         stage('Deploy') {
             steps {
                 echo 'Deploying...'
