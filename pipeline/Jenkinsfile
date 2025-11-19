@@ -67,6 +67,7 @@ pipeline {
                 echo 'Verifying APK exists...'
                 sh "ls -lh ${APK_PATH}"
                 sh "file ${APK_PATH}"
+                echo '✅ APK verification completed successfully.'
             }
         }
         
