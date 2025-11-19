@@ -5,10 +5,9 @@ pipeline {
         flutter 'Flutter SDK'
     }
         environment {
-            JAVA_HOME = '/usr/lib/jvm/java-11-openjdk-amd64'
-            PATH = "${env.JAVA_HOME}/bin:${env.PATH}"
-            FLUTTER_HOME = '/opt/flutter'
-            PATH = "${env.FLUTTER_HOME}/bin:${env.PATH}"
+            FLUTTER_HOME = "/opt/flutter"
+            ANDROID_HOME = "/opt/android-sdk"
+            PATH = "${FLUTTER_HOME}/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
         }
 
     stages {
