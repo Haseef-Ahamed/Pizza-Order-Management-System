@@ -79,7 +79,7 @@ pipeline {
                     string(credentialsId: 'firebase-app-id', variable: 'FIREBASE_APP_ID')
                     ]) {
                     script {
-                        def releaseNotes = "Build #${BUILD_NUMBER}\nCommit: ${GIT_COMMIT}\nBranch: ${GIT_BRANCH}"
+                        def releaseNotes = "Build #${BUILD_NUMBER}\nCommit: ${GIT_COMMIT}\nBranch: ${GIT_BRANCH}\\nTimestamp: ${new Date()}"
                         
                         sh """
                             export GOOGLE_APPLICATION_CREDENTIALS=\${GOOGLE_CREDENTIALS}
