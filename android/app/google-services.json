@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "852450815756",
+    "project_id": "order-management-pipeline",
+    "storage_bucket": "order-management-pipeline.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:852450815756:android:0d5f53d2e802ff0d662329",
+        "android_client_info": {
+          "package_name": "com.example.pizza_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCku6n4sAOkr1E7d6WJzXOat4GCuN7nkSw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
