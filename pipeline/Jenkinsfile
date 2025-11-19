@@ -9,6 +9,13 @@ pipeline {
                 // Add checkout steps here
             }
         }
+        stage('Set up Flutter') {
+            steps {
+                echo 'Setting up Flutter environment...'
+                sh 'flutter --version'
+                echo 'Flutter environment set up successfully.'
+            }
+        }
         stage('install dependencies') {
             steps {
                 echo 'Installing dependencies...'
