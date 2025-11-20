@@ -116,7 +116,7 @@ pipeline {
         
         stage('Deploy') {
             steps {
-                echo 'Deploying...'
+                echo 'ready to Deploying to Production...'
                 // Add deploy steps here
             }
         }
